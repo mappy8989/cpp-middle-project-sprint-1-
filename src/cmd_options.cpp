@@ -1,31 +1,71 @@
 #include "cmd_options.h"
+#include <algorithm>
 #include <boost/program_options/value_semantic.hpp>
 #include <iostream>
+#include <regex>
+#include <string>
 
 namespace po = boost::program_options;
 
 namespace CryptoGuard {
 
 ProgramOptions::ProgramOptions() : desc_("Allowed options") {
-    desc_.add_options()("help", "produce help message")("command", po::value<std::string>(),
-                                                        "commands 'encrypt', 'decrypt' or 'checksum'")(
-        "input", po::value<std::string>(), "path to the input file")("output", po::value<std::string>(),
-                                                                     "path to the output file to be saved")(
-        "password", po::value<std::string>(), "password for encryption and decryption");
+  desc_.add_options()("help", "produce help message")(
+      "command", po::value<std::string>(),
+      "commands 'encrypt', 'decrypt' or 'checksum'")(
+      "input", po::value<std::string>(),
+      "path to the input file")("output", po::value<std::string>(),
+                                "path to the output file to be saved")(
+      "password", po::value<std::string>(),
+      "password for encryption and decryption");
 }
 
 ProgramOptions::~ProgramOptions() = default;
 
 bool ProgramOptions::Parse(int argc, char *argv[]) {
-    po::variables_map vm_;
-    po::store(po::parse_command_line(argc, argv, desc_), vm_);
+  po::variables_map vm_;
+  po::store(po::parse_command_line(argc, argv, desc_), vm_);
 
-    if (vm_.count("help")) {
-        std::cout << desc_ << "\n";
-        exit(0);
+  const std::regex path_pattern(
+      "[a-zA-Z0-9.]+$"); // for example, we can handle only files from the same
+                         // folder
+  std::smatch base_match;
+
+  if (vm_.count("help")) {
+    std::cout << desc_ << "\n";
+    exit(0);
+  }
+  if (vm_.count("command")) {
+    auto it = commandMapping_.find(vm_["command"].as<std::string>());
+    if (it != commandMapping_.end()) {
+      if (it->first == "encrypt") {
+        command_ = COMMAND_TYPE::ENCRYPT;
+      } else if (it->first == "decrypt") {
+        command_ = COMMAND_TYPE::DECRYPT;
+      } else if (it->first == "checksum") {
+        command_ = COMMAND_TYPE::CHECKSUM;
+      } else {
+        throw std::invalid_argument("Invalid argument passed!");
+      }
     }
+  }
+  if (vm_.count("input")) {
+    inputFile_ = vm_["input"].as<std::string>();
+    if (!std::regex_match(inputFile_, base_match, path_pattern)) {
+      throw std::invalid_argument("Invalid argument passed!");
+    }
+  }
+  if (vm_.count("output")) {
+    outputFile_ = vm_["output"].as<std::string>();
+    if (!std::regex_match(outputFile_, base_match, path_pattern)) {
+      throw std::invalid_argument("Invalid argument passed!");
+    }
+  }
+  if (vm_.count("password")) {
+    password_ = vm_["password"].as<std::string>();
+  }
 
-    return true;
+  return true;
 }
 
-}  // namespace CryptoGuard
+} // namespace CryptoGuard

@@ -21,9 +21,6 @@ public:
                    std::string_view password);
   void DecryptFile(std::iostream &inStream, std::iostream &outStream,
                    std::string_view password);
-  std::string CalculateChecksum(std::iostream &inStream) {
-    return "NOT_IMPLEMENTED";
-  }
 
 private:
   struct Impl;

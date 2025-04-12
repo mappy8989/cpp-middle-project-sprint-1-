@@ -34,37 +34,33 @@ struct CryptoGuardCtx::Impl {
     EVP_CipherInit_ex(evp_ctx_.get(), params.cipher, nullptr, params.key.data(),
                       params.iv.data(), params.encrypt);
 
-    int outLen;
-
     auto originalPos = inStream.tellg();
     // Seek to the end to get the total size
     inStream.seekg(0, std::ios_base::end);
-    auto size = inStream.tellg();
+    int in_size = inStream.tellg();
     inStream.seekg(originalPos);
-    std::vector<unsigned char> in_vec(size);
-    inStream.read((char *)in_vec.data(), size);
+    std::vector<unsigned char> in_vec((in_size / 16) * 16 +
+                                      ((in_size % 16) ? 16 : 0));
+    inStream.read((char *)in_vec.data(), in_size);
 
     unsigned char out_buf[16];
+    int out_Len;
+    int in_shift = 0;
 
-    // Обрабатываем первые N символов
-    EVP_CipherUpdate(evp_ctx_.get(), out_buf, &outLen, in_vec.data(),
-                     static_cast<int>(16));
-    outStream.write((const char *)out_buf, outLen);
-    if (!inStream.good() || !outStream.good()) {
-      return false;
-    }
-
-    // Обрабатываем оставшиеся символы
-    EVP_CipherUpdate(evp_ctx_.get(), out_buf, &outLen, in_vec.data(),
-                     static_cast<int>(16));
-    outStream.write((const char *)out_buf, outLen);
-    if (!inStream.good() || !outStream.good()) {
-      return false;
+    while (in_shift < in_size) {
+      // Обрабатываем оставшиеся символы
+      EVP_CipherUpdate(evp_ctx_.get(), out_buf, &out_Len,
+                       &in_vec.data()[in_shift], static_cast<int>(16));
+      outStream.write((const char *)out_buf, out_Len);
+      in_shift += 16;
+      if (!inStream.good() || !outStream.good()) {
+        return false;
+      }
     }
 
     // Заканчиваем работу с cipher
-    EVP_CipherFinal_ex(evp_ctx_.get(), out_buf, &outLen);
-    outStream.write((const char *)out_buf, outLen);
+    EVP_CipherFinal_ex(evp_ctx_.get(), out_buf, &out_Len);
+    outStream.write((const char *)out_buf, out_Len);
     if (!inStream.good() || !outStream.good()) {
       return false;
     }
@@ -74,9 +70,42 @@ struct CryptoGuardCtx::Impl {
 
   bool DecryptFile(std::iostream &inStream, std::iostream &outStream,
                    std::string_view password) {
-    if (!inStream.fail() || !outStream.good()) {
+    auto params = CreateChiperParamsFromPassword(password);
+    params.encrypt = 0; // decryption
+
+    EVP_CipherInit_ex(evp_ctx_.get(), params.cipher, nullptr, params.key.data(),
+                      params.iv.data(), params.encrypt);
+
+    auto originalPos = inStream.tellg();
+    // Seek to the end to get the total size
+    inStream.seekg(0, std::ios_base::end);
+    int in_size = inStream.tellg();
+    inStream.seekg(originalPos);
+
+    std::vector<unsigned char> ciphertext(in_size);
+    inStream.read((char *)ciphertext.data(), in_size);
+
+    std::vector<unsigned char> plaintext(
+        in_size +
+        EVP_CIPHER_block_size(params.cipher)); // Allocate space for plaintext
+
+    int len = 0;
+    int plaintext_len = 0;
+
+    // Decrypt the ciphertext
+    if (EVP_CipherUpdate(evp_ctx_.get(), plaintext.data(), &len,
+                         ciphertext.data(), ciphertext.size()) != 1) {
       return false;
     }
+    outStream.write((const char *)plaintext.data(), plaintext_len);
+    plaintext_len += len;
+
+    // Finalize the decryption
+    if (EVP_CipherFinal_ex(evp_ctx_.get(), plaintext.data() + plaintext_len,
+                           &len) != 1) {
+      return false;
+    }
+    outStream.write((const char *)plaintext.data(), plaintext_len);
 
     return true;
   }
@@ -111,13 +140,15 @@ void CryptoGuardCtx::EncryptFile(std::iostream &inStream,
                                  std::iostream &outStream,
                                  std::string_view password) {
   if (pImpl_->EncryptFile(inStream, outStream, password) == false) {
-    throw std::runtime_error("Encryption error occurred");
+    throw std::logic_error("Encryption error occurred");
   }
 }
 void CryptoGuardCtx::DecryptFile(std::iostream &inStream,
                                  std::iostream &outStream,
                                  std::string_view password) {
-  pImpl_->DecryptFile(inStream, outStream, password);
+  if (pImpl_->DecryptFile(inStream, outStream, password) == false) {
+    throw std::logic_error("Decryption error occurred");
+  }
 }
 
 } // namespace CryptoGuard

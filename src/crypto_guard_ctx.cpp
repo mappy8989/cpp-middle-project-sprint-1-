@@ -16,10 +16,20 @@ struct AesCipherParams {
   std::array<unsigned char, IV_SIZE> iv;   // Initialization vector
 };
 
-struct CryptoGuardCtx::Impl {
-  Impl() : evp_ctx_(EVP_CIPHER_CTX_new()) {}
+class CryptoGuardCtx::Impl {
+public:
+  Impl() : cipher_ctx_(EVP_CIPHER_CTX_new()) {}
   ~Impl() {}
   std::string CalculateChecksum(std::iostream &inStream) {
+    int in_size = GetIOstreamSize(inStream);
+    std::vector<unsigned char> in_vec(in_size);
+    inStream.read((char *)in_vec.data(), in_size);
+
+    EVP_DigestInit(md_ctx_.get(), EVP_sha256());
+
+    //  EVP_DigestUpdate(md_ctx_.get(), reinterpret_cast<void *>(buffer),
+    //                 buffer_size);
+
     return "NOT_IMPLEMENTED";
   }
 
@@ -31,17 +41,14 @@ struct CryptoGuardCtx::Impl {
 
     auto params = CreateChiperParamsFromPassword(password);
 
-    EVP_CipherInit_ex(evp_ctx_.get(), params.cipher, nullptr, params.key.data(),
-                      params.iv.data(), params.encrypt);
+    EVP_CipherInit_ex(cipher_ctx_.get(), params.cipher, nullptr,
+                      params.key.data(), params.iv.data(), params.encrypt);
 
-    auto originalPos = inStream.tellg();
-    // Seek to the end to get the total size
-    inStream.seekg(0, std::ios_base::end);
-    int in_size = inStream.tellg();
-    inStream.seekg(originalPos);
+    int in_size = GetIOstreamSize(inStream);
+    // have to create buffer with 16-bytes padding
     std::vector<unsigned char> in_vec((in_size / 16) * 16 +
                                       ((in_size % 16) ? 16 : 0));
-    inStream.read((char *)in_vec.data(), in_size);
+    inStream.read(reinterpret_cast<char *>(in_vec.data()), in_size);
 
     unsigned char out_buf[16];
     int out_Len;
@@ -49,9 +56,9 @@ struct CryptoGuardCtx::Impl {
 
     while (in_shift < in_size) {
       // Обрабатываем оставшиеся символы
-      EVP_CipherUpdate(evp_ctx_.get(), out_buf, &out_Len,
+      EVP_CipherUpdate(cipher_ctx_.get(), out_buf, &out_Len,
                        &in_vec.data()[in_shift], static_cast<int>(16));
-      outStream.write((const char *)out_buf, out_Len);
+      outStream.write(reinterpret_cast<const char *>(out_buf), out_Len);
       in_shift += 16;
       if (!inStream.good() || !outStream.good()) {
         return false;
@@ -59,8 +66,8 @@ struct CryptoGuardCtx::Impl {
     }
 
     // Заканчиваем работу с cipher
-    EVP_CipherFinal_ex(evp_ctx_.get(), out_buf, &out_Len);
-    outStream.write((const char *)out_buf, out_Len);
+    EVP_CipherFinal_ex(cipher_ctx_.get(), out_buf, &out_Len);
+    outStream.write(reinterpret_cast<const char *>(out_buf), out_Len);
     if (!inStream.good() || !outStream.good()) {
       return false;
     }
@@ -73,17 +80,12 @@ struct CryptoGuardCtx::Impl {
     auto params = CreateChiperParamsFromPassword(password);
     params.encrypt = 0; // decryption
 
-    EVP_CipherInit_ex(evp_ctx_.get(), params.cipher, nullptr, params.key.data(),
-                      params.iv.data(), params.encrypt);
+    EVP_CipherInit_ex(cipher_ctx_.get(), params.cipher, nullptr,
+                      params.key.data(), params.iv.data(), params.encrypt);
 
-    auto originalPos = inStream.tellg();
-    // Seek to the end to get the total size
-    inStream.seekg(0, std::ios_base::end);
-    int in_size = inStream.tellg();
-    inStream.seekg(originalPos);
-
+    int in_size = GetIOstreamSize(inStream);
     std::vector<unsigned char> ciphertext(in_size);
-    inStream.read((char *)ciphertext.data(), in_size);
+    inStream.read(reinterpret_cast<char *>(ciphertext.data()), in_size);
 
     std::vector<unsigned char> plaintext(
         in_size +
@@ -93,23 +95,26 @@ struct CryptoGuardCtx::Impl {
     int plaintext_len = 0;
 
     // Decrypt the ciphertext
-    if (EVP_CipherUpdate(evp_ctx_.get(), plaintext.data(), &len,
+    if (EVP_CipherUpdate(cipher_ctx_.get(), plaintext.data(), &len,
                          ciphertext.data(), ciphertext.size()) != 1) {
       return false;
     }
-    outStream.write((const char *)plaintext.data(), plaintext_len);
+    outStream.write(reinterpret_cast<const char *>(plaintext.data()),
+                    plaintext_len);
     plaintext_len += len;
 
     // Finalize the decryption
-    if (EVP_CipherFinal_ex(evp_ctx_.get(), plaintext.data() + plaintext_len,
+    if (EVP_CipherFinal_ex(cipher_ctx_.get(), plaintext.data() + plaintext_len,
                            &len) != 1) {
       return false;
     }
-    outStream.write((const char *)plaintext.data(), plaintext_len);
+    outStream.write(reinterpret_cast<const char *>(plaintext.data()),
+                    plaintext_len);
 
     return true;
   }
 
+private:
   AesCipherParams CreateChiperParamsFromPassword(std::string_view password) {
     AesCipherParams params;
     constexpr std::array<unsigned char, 8> salt = {'1', '2', '3', '4',
@@ -127,10 +132,24 @@ struct CryptoGuardCtx::Impl {
     return params;
   }
 
+  int GetIOstreamSize(std::iostream &stream) {
+    auto originalPos = stream.tellg();
+    // Seek to the end to get the total size
+    stream.seekg(0, std::ios_base::end);
+    int in_size = stream.tellg();
+    stream.seekg(originalPos);
+
+    return in_size;
+  }
+
   std::unique_ptr<EVP_CIPHER_CTX, decltype([](EVP_CIPHER_CTX *ctx) {
                     EVP_CIPHER_CTX_free(ctx);
                   })>
-      evp_ctx_;
+      cipher_ctx_;
+
+  std::unique_ptr<EVP_MD_CTX,
+                  decltype([](EVP_MD_CTX *ctx) { EVP_MD_CTX_free(ctx); })>
+      md_ctx_;
 };
 
 CryptoGuardCtx::CryptoGuardCtx() : pImpl_(std::make_unique<Impl>()) {}

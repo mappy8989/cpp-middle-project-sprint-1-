@@ -1,5 +1,4 @@
 #include "cmd_options.h"
-#include <algorithm>
 #include <boost/program_options/parsers.hpp>
 #include <boost/program_options/value_semantic.hpp>
 #include <iostream>

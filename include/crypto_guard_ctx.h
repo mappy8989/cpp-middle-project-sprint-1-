@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <string>
 
 namespace CryptoGuard {
 
@@ -23,7 +22,7 @@ public:
                    std::string_view password);
 
 private:
-  struct Impl;
+  class Impl;
   std::unique_ptr<Impl> pImpl_;
 };
 

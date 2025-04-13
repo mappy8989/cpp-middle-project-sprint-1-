@@ -1,6 +1,5 @@
 #include "cmd_options.h"
 #include <gtest/gtest.h>
-#include <memory>
 
 TEST(cmd_options, optionCheck) {
   CryptoGuard::ProgramOptions options;

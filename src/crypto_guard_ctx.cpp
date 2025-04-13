@@ -1,10 +1,10 @@
 #include "crypto_guard_ctx.h"
 #include <cstddef>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <openssl/evp.h>
 #include <sstream>
-#include <stdexcept>
 #include <vector>
 
 namespace CryptoGuard {
@@ -72,6 +72,7 @@ public:
     }
 
     auto params = CreateChiperParamsFromPassword(password);
+    params.encrypt = 1; // encryption
 
     EVP_CipherInit_ex(cipher_ctx_.get(), params.cipher, nullptr,
                       params.key.data(), params.iv.data(), params.encrypt);

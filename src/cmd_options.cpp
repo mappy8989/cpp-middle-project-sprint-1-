@@ -32,9 +32,11 @@ bool ProgramOptions::Parse(int argc, char *argv[]) {
     return false;
   }
 
-  const std::regex path_pattern(
-      "[a-zA-Z0-9.]+$"); // for example, we can handle only files from the same
-                         // folder
+  const std::regex symbols_pattern("[a-zA-Z0-9!@#$%^&*()_\\-+=\\[\\]{}|\\\\;:"
+                                   "\"'<>,.?/~`\\s]+$"); // only
+                                                         // symbols
+                                                         // from
+                                                         // keyboard
   std::smatch base_match;
 
   if (vm_.count("help")) {
@@ -59,13 +61,13 @@ bool ProgramOptions::Parse(int argc, char *argv[]) {
   }
   if (vm_.count("input")) {
     inputFile_ = vm_["input"].as<std::string>();
-    if (!std::regex_match(inputFile_, base_match, path_pattern)) {
+    if (!std::regex_match(inputFile_, base_match, symbols_pattern)) {
       return false;
     }
   }
   if (vm_.count("output")) {
     outputFile_ = vm_["output"].as<std::string>();
-    if (!std::regex_match(outputFile_, base_match, path_pattern)) {
+    if (!std::regex_match(outputFile_, base_match, symbols_pattern)) {
       return false;
     }
   }

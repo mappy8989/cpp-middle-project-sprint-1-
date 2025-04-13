@@ -103,11 +103,13 @@ TEST(crypto_guard, hash_1) {
 
 TEST(crypto_guard, hash_2) {
   CryptoGuard::CryptoGuardCtx guard;
-  std::stringstream input;
+  std::stringstream input("1 1");
   std::stringstream out;
 
   const std::string correct_hash_str =
-      "15e2b0d3c33891ebb0f1ef609ec419420c20e320ce94c65fbc8c3312448eb225";
+      "020a7c91e30725bb191818987340dec6040aff93923840de685e1e1d7b3d071a";
 
-  ASSERT_THROW(guard.CalculateChecksum(input), std::runtime_error);
+  std::string hash = guard.CalculateChecksum(input);
+
+  EXPECT_EQ(correct_hash_str, hash);
 }

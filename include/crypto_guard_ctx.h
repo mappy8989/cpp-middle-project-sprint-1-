@@ -21,6 +21,8 @@ public:
   void DecryptFile(std::iostream &inStream, std::iostream &outStream,
                    std::string_view password);
 
+  std::string CalculateChecksum(std::iostream &inStream);
+
 private:
   class Impl;
   std::unique_ptr<Impl> pImpl_;

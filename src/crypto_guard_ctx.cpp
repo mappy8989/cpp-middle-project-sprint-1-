@@ -1,7 +1,10 @@
 #include "crypto_guard_ctx.h"
 #include <cstddef>
+#include <iomanip>
 #include <iostream>
 #include <openssl/evp.h>
+#include <sstream>
+#include <stdexcept>
 #include <vector>
 
 namespace CryptoGuard {
@@ -21,17 +24,45 @@ public:
   Impl(CryptoGuardCtx *outer)
       : cipher_ctx_(EVP_CIPHER_CTX_new()), md_ctx_(EVP_MD_CTX_new()) {}
   ~Impl() {}
+
+  Impl(const Impl &) = delete;
+  Impl &operator=(const Impl &) = delete;
+
+  Impl(Impl &&) noexcept = delete;
+  Impl &operator=(Impl &&) noexcept = delete;
+
   std::string CalculateChecksum(std::iostream &inStream) {
     int in_size = GetIOstreamSize(inStream);
     std::vector<unsigned char> in_vec(in_size);
     inStream.read((char *)in_vec.data(), in_size);
 
+    unsigned char md_value[EVP_MAX_MD_SIZE];
+    unsigned int md_len, i;
+
     EVP_DigestInit(md_ctx_.get(), EVP_sha256());
+    if (!EVP_DigestInit_ex2(md_ctx_.get(), EVP_sha256(), NULL)) {
+      outer_->ERR_get_error("Cannot init digest");
+    }
 
-    //  EVP_DigestUpdate(md_ctx_.get(), reinterpret_cast<void *>(buffer),
-    //                 buffer_size);
+    if (!EVP_DigestUpdate(md_ctx_.get(),
+                          reinterpret_cast<void *>(in_vec.data()), in_size)) {
+      outer_->ERR_get_error("Cannot update digest");
+    }
 
-    return "NOT_IMPLEMENTED";
+    unsigned char hash[EVP_MAX_MD_SIZE];
+    unsigned int hash_length = 0;
+    if (!EVP_DigestFinal(md_ctx_.get(), hash, &hash_length)) {
+      outer_->ERR_get_error("Cannot final digest");
+    }
+
+    std::stringstream ss;
+    ss << std::hex << std::setfill('0');
+
+    for (unsigned int i = 0; i < hash_length; ++i) {
+      ss << std::setw(2) << static_cast<int>(hash[i]); // set every byte as hex
+    }
+
+    return ss.str();
   }
 
   bool EncryptFile(std::iostream &inStream, std::iostream &outStream,
@@ -171,6 +202,10 @@ void CryptoGuardCtx::DecryptFile(std::iostream &inStream,
   if (pImpl_->DecryptFile(inStream, outStream, password) == false) {
     ERR_get_error("Decryption error occurred");
   }
+}
+
+std::string CryptoGuardCtx::CalculateChecksum(std::iostream &inStream) {
+  return pImpl_->CalculateChecksum(inStream);
 }
 
 } // namespace CryptoGuard

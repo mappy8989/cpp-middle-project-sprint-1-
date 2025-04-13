@@ -18,7 +18,8 @@ struct AesCipherParams {
 
 class CryptoGuardCtx::Impl {
 public:
-  Impl() : cipher_ctx_(EVP_CIPHER_CTX_new()) {}
+  Impl(CryptoGuardCtx *outer)
+      : cipher_ctx_(EVP_CIPHER_CTX_new()), md_ctx_(EVP_MD_CTX_new()) {}
   ~Impl() {}
   std::string CalculateChecksum(std::iostream &inStream) {
     int in_size = GetIOstreamSize(inStream);
@@ -126,7 +127,7 @@ private:
                        password.size(), 1, params.key.data(), params.iv.data());
 
     if (result == 0) {
-      throw std::runtime_error{"Failed to create a key from password"};
+      outer_->ERR_get_error("Failed to create a key from password");
     }
 
     return params;
@@ -150,23 +151,25 @@ private:
   std::unique_ptr<EVP_MD_CTX,
                   decltype([](EVP_MD_CTX *ctx) { EVP_MD_CTX_free(ctx); })>
       md_ctx_;
+
+  CryptoGuardCtx *outer_;
 };
 
-CryptoGuardCtx::CryptoGuardCtx() : pImpl_(std::make_unique<Impl>()) {}
+CryptoGuardCtx::CryptoGuardCtx() : pImpl_(std::make_unique<Impl>(this)) {}
 CryptoGuardCtx::~CryptoGuardCtx() = default;
 
 void CryptoGuardCtx::EncryptFile(std::iostream &inStream,
                                  std::iostream &outStream,
                                  std::string_view password) {
   if (pImpl_->EncryptFile(inStream, outStream, password) == false) {
-    throw std::logic_error("Encryption error occurred");
+    ERR_get_error("Encryption error occurred");
   }
 }
 void CryptoGuardCtx::DecryptFile(std::iostream &inStream,
                                  std::iostream &outStream,
                                  std::string_view password) {
   if (pImpl_->DecryptFile(inStream, outStream, password) == false) {
-    throw std::logic_error("Decryption error occurred");
+    ERR_get_error("Decryption error occurred");
   }
 }
 

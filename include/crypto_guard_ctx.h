@@ -24,6 +24,8 @@ public:
 private:
   class Impl;
   std::unique_ptr<Impl> pImpl_;
+
+  void ERR_get_error(std::string err_msg) { throw std::runtime_error(err_msg); }
 };
 
 // struct CryptoGuardCtx::Impl;

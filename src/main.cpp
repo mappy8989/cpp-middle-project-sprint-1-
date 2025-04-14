@@ -1,6 +1,7 @@
 #include "cmd_options.h"
 #include "crypto_guard_ctx.h"
 #include <array>
+#include <fstream>
 #include <iostream>
 #include <openssl/evp.h>
 #include <print>
@@ -40,26 +41,45 @@ int main(int argc, char *argv[]) {
     OpenSSL_add_all_algorithms();
 
     CryptoGuard::ProgramOptions options;
-    options.Parse(argc, argv);
+    if (!options.Parse(argc, argv)) {
+      throw std::runtime_error("Incorrect console parameters");
+    }
 
     CryptoGuard::CryptoGuardCtx cryptoCtx;
 
     using COMMAND_TYPE = CryptoGuard::ProgramOptions::COMMAND_TYPE;
     switch (options.GetCommand()) {
-    case COMMAND_TYPE::ENCRYPT: {
-      std::stringstream ss_in(options.GetInputFile().c_str());
-      std::stringstream ss_out;
-      cryptoCtx.EncryptFile(ss_in, ss_out, options.GetPassword());
-
-      std::print("File encoded successfully\n");
-    } break;
-
+    case COMMAND_TYPE::ENCRYPT:
     case COMMAND_TYPE::DECRYPT: {
-      std::stringstream ss_in(options.GetInputFile().c_str());
-      std::stringstream ss_out;
-      cryptoCtx.DecryptFile(ss_in, ss_out, options.GetPassword());
+      std::ifstream fileStream_in(options.GetInputFile());
+      if (!fileStream_in) {
+        throw std::runtime_error("Cannot open input file");
+      }
+      std::ofstream fileStream_out(options.GetOutputFile());
+      if (!fileStream_out) {
+        throw std::runtime_error("Cannot open output file");
+      }
 
-      std::print("File decoded successfully\n");
+      std::stringstream ss_in, ss_out;
+      ss_in << fileStream_in.rdbuf(); // read input file
+
+      if (options.GetCommand() == COMMAND_TYPE::ENCRYPT) {
+        cryptoCtx.EncryptFile(ss_in, ss_out, options.GetPassword());
+      } else {
+        cryptoCtx.DecryptFile(ss_in, ss_out, options.GetPassword());
+      }
+
+      std::string st = ss_out.str();
+
+      fileStream_out << ss_out.str();
+
+      // Close the file stream
+      fileStream_in.close();
+      fileStream_out.close();
+
+      std::print("File {} successfully\n",
+                 options.GetCommand() == COMMAND_TYPE::ENCRYPT ? "encocded"
+                                                               : "decoded");
     } break;
 
     case COMMAND_TYPE::CHECKSUM: {

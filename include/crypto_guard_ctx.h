@@ -6,30 +6,26 @@ namespace CryptoGuard {
 
 class CryptoGuardCtx {
 public:
-  CryptoGuardCtx();
-  ~CryptoGuardCtx();
+    CryptoGuardCtx();
+    ~CryptoGuardCtx();
 
-  CryptoGuardCtx(const CryptoGuardCtx &) = delete;
-  CryptoGuardCtx &operator=(const CryptoGuardCtx &) = delete;
+    CryptoGuardCtx(const CryptoGuardCtx &) = delete;
+    CryptoGuardCtx &operator=(const CryptoGuardCtx &) = delete;
 
-  CryptoGuardCtx(CryptoGuardCtx &&) noexcept = default;
-  CryptoGuardCtx &operator=(CryptoGuardCtx &&) noexcept = default;
+    CryptoGuardCtx(CryptoGuardCtx &&) noexcept = default;
+    CryptoGuardCtx &operator=(CryptoGuardCtx &&) noexcept = default;
 
-  // API
-  void EncryptFile(std::iostream &inStream, std::iostream &outStream,
-                   std::string_view password);
-  void DecryptFile(std::iostream &inStream, std::iostream &outStream,
-                   std::string_view password);
+    // API
+    void EncryptFile(std::iostream &inStream, std::iostream &outStream, std::string_view password);
+    void DecryptFile(std::iostream &inStream, std::iostream &outStream, std::string_view password);
 
-  std::string CalculateChecksum(std::iostream &inStream);
+    std::string CalculateChecksum(std::iostream &inStream);
 
 private:
-  class Impl;
-  std::unique_ptr<Impl> pImpl_;
-
-  void ERR_get_error(std::string err_msg) { throw std::runtime_error(err_msg); }
+    class Impl;
+    std::unique_ptr<Impl> pImpl_;
 };
 
 // struct CryptoGuardCtx::Impl;
 
-} // namespace CryptoGuard
+}  // namespace CryptoGuard

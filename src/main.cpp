@@ -39,9 +39,7 @@ int main(int argc, char *argv[]) {
         OpenSSL_add_all_algorithms();
 
         CryptoGuard::ProgramOptions options;
-        if (!options.Parse(argc, argv)) {
-            throw std::runtime_error("Incorrect console parameters");
-        }
+        options.Parse(argc, argv);
 
         CryptoGuard::CryptoGuardCtx cryptoCtx;
 
@@ -49,46 +47,32 @@ int main(int argc, char *argv[]) {
         switch (options.GetCommand()) {
         case COMMAND_TYPE::ENCRYPT:
         case COMMAND_TYPE::DECRYPT: {
-            std::ifstream fileStream_in(options.GetInputFile());
+            std::fstream fileStream_in(options.GetInputFile());
             if (!fileStream_in) {
                 throw std::runtime_error("Cannot open input file");
             }
-            std::ofstream fileStream_out(options.GetOutputFile());
+            std::fstream fileStream_out(options.GetOutputFile());
             if (!fileStream_out) {
                 throw std::runtime_error("Cannot open output file");
             }
 
-            std::stringstream ss_in, ss_out;
-            ss_in << fileStream_in.rdbuf();  // read input file
-
             if (options.GetCommand() == COMMAND_TYPE::ENCRYPT) {
-                cryptoCtx.EncryptFile(ss_in, ss_out, options.GetPassword());
+                cryptoCtx.EncryptFile(fileStream_in, fileStream_out, options.GetPassword());
             } else {
-                cryptoCtx.DecryptFile(ss_in, ss_out, options.GetPassword());
+                cryptoCtx.DecryptFile(fileStream_in, fileStream_out, options.GetPassword());
             }
-
-            std::string st = ss_out.str();
-
-            fileStream_out << ss_out.str();
-
-            // Close the file stream
-            fileStream_in.close();
-            fileStream_out.close();
 
             std::print("File {} successfully\n",
                        options.GetCommand() == COMMAND_TYPE::ENCRYPT ? "encocded" : "decoded");
         } break;
 
         case COMMAND_TYPE::CHECKSUM: {
-            std::ifstream fileStream_in(options.GetInputFile());
+            std::fstream fileStream_in(options.GetInputFile());
             if (!fileStream_in) {
                 throw std::runtime_error("Cannot open input file");
             }
 
-            std::stringstream ss_in, ss_out;
-            ss_in << fileStream_in.rdbuf();
-            std::string hash = cryptoCtx.CalculateChecksum(ss_in);
-            fileStream_in.close();
+            std::string hash = cryptoCtx.CalculateChecksum(fileStream_in);
 
             std::print("Checksum calculated successfully:\n{}\n", hash);
         } break;

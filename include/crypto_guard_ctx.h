@@ -4,6 +4,8 @@
 
 namespace CryptoGuard {
 
+enum class CRYPT_TYPE { ENCRYPT = 1, DECRYPT = 0 };
+
 class CryptoGuardCtx {
 public:
     CryptoGuardCtx();

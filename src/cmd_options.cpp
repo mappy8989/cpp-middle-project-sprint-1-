@@ -19,7 +19,7 @@ ProgramOptions::ProgramOptions() : desc_("Allowed options") {
 
 ProgramOptions::~ProgramOptions() = default;
 
-bool ProgramOptions::Parse(int argc, char *argv[]) {
+void ProgramOptions::Parse(int argc, char *argv[]) {
     po::variables_map vm_;
     auto parsed = po::command_line_parser(argc, argv).options(desc_).run();
     po::store(parsed, vm_);
@@ -29,7 +29,7 @@ bool ProgramOptions::Parse(int argc, char *argv[]) {
     }
 
     if (po::collect_unrecognized(parsed.options, po::include_positional).empty() == false) {
-        return false;
+        throw std::runtime_error{"Unrecognised command found"};
     }
 
     const std::regex symbols_pattern("[a-zA-Z0-9!@#$%^&*()_\\-+=\\[\\]{}|\\\\;:"
@@ -78,8 +78,6 @@ bool ProgramOptions::Parse(int argc, char *argv[]) {
     if (vm_.count("password")) {
         password_ = vm_["password"].as<std::string>();
     }
-
-    return true;
 }
 
 }  // namespace CryptoGuard

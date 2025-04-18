@@ -32,7 +32,7 @@ public:
 
   std::string CalculateChecksum(std::iostream &inStream) {
     // max chunk size to read
-    constexpr size_t BUFFER_SIZE = 65536;
+    constexpr size_t BUFFER_SIZE = 65'536;
 
     int in_size = GetIOstreamSize(inStream);
     std::vector<char> in_vec((in_size > BUFFER_SIZE) ? BUFFER_SIZE : in_size);
@@ -74,50 +74,52 @@ public:
     return ss.str();
   }
 
-  bool EncryptFile(std::iostream &inStream, std::iostream &outStream,
+  void EncryptFile(std::iostream &inStream, std::iostream &outStream,
                    std::string_view password) {
     if (!inStream.good() || !outStream.good()) {
       throw std::runtime_error("Input or output streams are invalid");
     }
 
-    const int MAX_CHUNK_SIZE = 16;
+    constexpr size_t BUFFER_SIZE = 1024;
+    int out_Len;
+
+    int in_size = GetIOstreamSize(inStream);
+    std::vector<char> in_vec((in_size > BUFFER_SIZE) ? BUFFER_SIZE : in_size);
+    std::vector<char> out_vec(in_vec.size() + EVP_MAX_BLOCK_LENGTH);
+
     auto params = CreateChiperParamsFromPassword(password);
     params.encrypt = 1; // encryption
 
     EVP_CipherInit_ex(cipher_ctx_.get(), params.cipher, nullptr,
                       params.key.data(), params.iv.data(), params.encrypt);
 
-    int in_size = GetIOstreamSize(inStream);
-    // have to create buffer with 16-bytes padding
-    std::vector<unsigned char> in_vec(in_size);
-    inStream.read(reinterpret_cast<char *>(in_vec.data()), in_size);
+    while (inStream.good() && !inStream.eof()) {
+      int read_size = (in_size > BUFFER_SIZE) ? BUFFER_SIZE : in_size;
 
-    unsigned char out_buf[MAX_CHUNK_SIZE];
-    int out_Len;
-    int in_shift = 0;
+      inStream.read(in_vec.data(), read_size);
+      std::streamsize bytesRead = inStream.gcount();
 
-    while (in_shift < in_size) {
-      int chunk_size = (in_size - in_shift) > MAX_CHUNK_SIZE
-                           ? MAX_CHUNK_SIZE
-                           : (in_size - in_shift);
-      // Обрабатываем оставшиеся символы
-      EVP_CipherUpdate(cipher_ctx_.get(), out_buf, &out_Len,
-                       &in_vec.data()[in_shift], chunk_size);
-      outStream.write(reinterpret_cast<const char *>(out_buf), out_Len);
-      in_shift += chunk_size;
-      if (!inStream.good() || !outStream.good()) {
-        return false;
+      if (bytesRead > 0) {
+        if (!EVP_CipherUpdate(cipher_ctx_.get(),
+                              reinterpret_cast<unsigned char *>(out_vec.data()),
+                              &out_Len,
+                              reinterpret_cast<unsigned char *>(in_vec.data()),
+                              static_cast<int>(bytesRead))) {
+          throw std::runtime_error("Cannot update cypher");
+        }
+      } else {
+        break;
       }
     }
 
     // Заканчиваем работу с cipher
-    EVP_CipherFinal_ex(cipher_ctx_.get(), out_buf, &out_Len);
-    outStream.write(reinterpret_cast<const char *>(out_buf), out_Len);
+    EVP_CipherFinal_ex(cipher_ctx_.get(),
+                       reinterpret_cast<unsigned char *>(out_vec.data()),
+                       &out_Len);
+    outStream.write(reinterpret_cast<const char *>(out_vec.data()), out_Len);
     if (!inStream.good() || !outStream.good()) {
-      return false;
+      throw std::runtime_error("Input or output stream are invalid");
     }
-
-    return true;
   }
 
   bool DecryptFile(std::iostream &inStream, std::iostream &outStream,
